@@ -3,25 +3,61 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 use std::collections::HashSet;
+use anyhow::{self, Result, Error};
 
-fn main() {
-    // let input_file = env::args().nth(1).expect("Error reading args");
-    // let mut events = read_file(&input_file);
-    
-    let mut events = read_directory("./test-logs");
+fn main() -> Result<()> {
+    let events = read_stdin().unwrap();
 
-    let mut events = filter_common_words(events);
+    let events = filter_common_words(events);
     let mut events = parse_events(events);
     events.sort_by(|a,b| b.len().partial_cmp(&a.len()).unwrap());
 
     for e in events {
         println!("{}", e);
     }
+
+    return Ok(());
 }
 
-fn read_file(file_name: &str) -> Vec<String> {
-    let events = read_events(file_name);
-    return split_events(&events);
+fn read_stdin() -> Result<Vec<String>> {
+
+    let input = match env::args().nth(1) {
+        Some(val) => val,
+        None => return Err(Error::msg("Missing input")),
+    };
+
+    return Ok(match_file(&input));
+}
+
+fn match_file(input: &str) -> Vec<String> {
+    let mut events = Vec::new();
+
+    match fs::metadata(input) {
+        Ok(metadata) => {
+            let file_type = metadata.file_type();
+
+            if file_type.is_file() {
+                if let Some(mut val) = read_file(input) {
+                    events.append(&mut val);
+                }
+            }
+            if file_type.is_dir() {
+                events.append(&mut read_directory(input));
+            }
+        },
+        Err(_) => eprintln!("metadata fail"),
+    }
+
+    return events;
+}
+
+fn read_file(file_name: &str) -> Option<Vec<String>> {
+    match std::path::Path::new(file_name).extension().and_then(|ext| ext.to_str()) {
+        Some("evtx") => {
+            return Some(split_events(&read_events(file_name)));
+        },
+        _ => return None,
+    }
 }
 
 fn read_directory(path: &str) -> Vec<String> {
@@ -30,9 +66,12 @@ fn read_directory(path: &str) -> Vec<String> {
     let mut events = Vec::new();
 
     for path in paths {
+
         match path {
-            Ok(p) => events.append(&mut read_file(&p.path().to_string_lossy())),
-            Err(_) => (),
+            Ok(p) => {
+                events.append(&mut match_file(&p.path().to_string_lossy()));
+            },
+            Err(_) => eprintln!("Not a path"),
         }
     }
 
@@ -70,16 +109,10 @@ fn filter_common_words(mut events: Vec<String>) -> Vec<String> {
     let mut filtered_events = Vec::new();
 
     let mut i = 0;
-    'event_loop: while i < events.len() {
+    while i < events.len() {
 
         //we don't want the event if it has one of the common_words in it, so we don't add it to
         //the vec if it is in the event
-        // for word in &common_words {
-        //     if events[i].contains(word) {
-        //         i += 1;
-        //         continue 'event_loop;
-        //     }
-        // }
         if common_words.iter().any(|x| events[i].contains(x)) {
             i += 1;
             continue;
