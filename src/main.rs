@@ -130,6 +130,8 @@ fn split_events(events: &[Value]) -> Vec<String> {
     for event in events {
         let mut event_data = String::new();
 
+        // eprintln!("{}", &event["Event"]["System"]["EventID"]["#text"]/*["EventRecordID"]*/);
+
         match &event["Event"]["EventData"]["CommandLine"] {
             Value::Null => (),
             val => {
@@ -143,13 +145,13 @@ fn split_events(events: &[Value]) -> Vec<String> {
                 event_data = format!("{} {}", event_data, val);
             },
         };
+        
 
         if event_data == "" {
             continue;
         }
 
         let event_split: Vec<_> = event_data.split(|c| c == ' ' || c == '(' || c == ')' || c == '#' || c == '.' || c == ',' || c == '\'' || c == '{' || c == '}' || c == '\"' || c == '-' || c == '*' || c == '_' || c == '<' || c == '>')
-            // .filter(|x| x != &"")
             .filter(|x| x.len() > 50)
             .map(|x| x.to_string())
             .collect();
@@ -184,5 +186,4 @@ fn read_events(path: &str) -> Vec<Value> {
 
     events
 }
-
 
